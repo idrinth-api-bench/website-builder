@@ -1,14 +1,11 @@
-const express = require('express');
-const https = require('https');
-const fs = require('fs');
-const { exec } = require('child_process');
-const crypto = require('crypto');
+import express from "express";
+import { exec } from "child_process";
+import crypto from "crypto";
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-//config variables for github
 let isDocumentationWebsiteUpdated = false;
 let isMindmapUpdated = false;
 let contributorsBuildRequired = false;
@@ -67,12 +64,9 @@ const isUpdateRequired = () => {
   return isMindmapUpdated || isDocumentationWebsiteUpdated;
 };
 const buildProject = async () => {
-  //checkout to the branch
   await executeCmd(`cd ${process.env.PROJECT_PATH} && git checkout ${process.env.BRANCH_NAME}`);
-  //pull the project
   await executeCmd(`cd ${process.env.PROJECT_PATH} && git pull`);
 
-  //installing libraries through npm install
   await executeCmd(`cd ${process.env.PROJECT_PATH} && npm ci`);
 
   const currentTime = Date.now();
@@ -81,7 +75,6 @@ const buildProject = async () => {
       console.log("No update required, updating the contributors only");
       await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run contributor-build`);
 
-      //moving the build files to the server
       await executeCmd(`cp -r ${process.env.PROJECT_PATH}/documentation-website/dist/ ${process.env.DIST_PATH}`);
       contributorsBuildTime = currentTime;
       contributorsBuildRequired = false;
@@ -91,18 +84,15 @@ const buildProject = async () => {
       return 202, "Contributors build will be done after the next build.";
     }
   }
-  //build the mindmap
   if (isMindmapUpdated) {
     console.log("Building Mindmap");
     await executeCmd(`cd ${process.env.PROJECT_PATH}/mindmap && npm run build`);
     mindmapBuildTime = currentTime;
     isMindmapUpdated = false;
 
-    //moving the build files to the server
     await executeCmd(`cp -r ${process.env.PROJECT_PATH}/mindmap/dist/ ${process.env.DIST_PATH}`);
   }
 
-  //build the documentation website
   if (isDocumentationWebsiteUpdated) {
     console.log("Building Documentation Website");
     await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run build`);
@@ -110,7 +100,6 @@ const buildProject = async () => {
     contributorsBuildTime = currentTime;
     isDocumentationWebsiteUpdated = false;
 
-    //moving the build files to the server
     await executeCmd(`cp -r ${process.env.PROJECT_PATH}/documentation-website/dist/ ${process.env.DIST_PATH}`);
   }
 

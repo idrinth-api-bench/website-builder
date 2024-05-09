@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "This repository is our website deploy and update tool to minimize github api queries.",
   "main": "index.js",
+  "type" : "module",
   "scripts": {
     "test": "node index.js"
   },
