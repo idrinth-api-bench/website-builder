@@ -32,7 +32,7 @@ app.post("/webhook", async (req, res) => {
     console.log("Result: ", result);
     res.status(result).send(respMessage);
   } else {
-    res.sendStatus(400).send("Invalid Github signature");
+    res.status(400).send("Invalid Github signature");
   }
 });
 
