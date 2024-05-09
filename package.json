@@ -1,5 +1,5 @@
 {
-  "name": "website-builder",
+  "name": "@idrinth-api-bench/website-builder",
   "version": "1.0.0",
   "description": "This repository is our website deploy and update tool to minimize github api queries.",
   "main": "index.js",
@@ -18,9 +18,9 @@
   "author": "Björn Büttner, Hussain Ali",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/idrinth-api-bench/website-builder/issues"
+    "url": "https://github.com/idrinth-api-bench/api-bench/issues"
   },
-  "homepage": "https://github.com/idrinth-api-bench/website-builder#readme",
+  "homepage": "https://github.com/idrinth-api-bench/api-bench/#readme",
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2"

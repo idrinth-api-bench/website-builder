@@ -5,14 +5,13 @@ const { exec } = require('child_process');
 const crypto = require('crypto');
 require("dotenv").config();
 
-const hmac = crypto.createHmac("sha1", process.env.GITHUB_SECRET);
-
 const app = express();
 const port = process.env.PORT || 3000;
 
 //config variables for github
 let isDocumentationWebsiteUpdated = false;
 let isMindmapUpdated = false;
+let contributorsBuildRequired = false;
 
 let documentationWebsiteBuildTime = Date.now();
 let mindmapBuildTime = Date.now();
@@ -25,15 +24,15 @@ app.post("/webhook", async (req, res) => {
   const signature = req.headers["x-hub-signature"];
   const payload = JSON.stringify(req.body);
 
+  const hmac = crypto.createHmac("sha1", process.env.GITHUB_SECRET);
   const calculatedSignature = `sha1=${hmac.update(payload).digest("hex")}`;
 
   if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(calculatedSignature))) {
-    const result = await getBranchStatus(req);
+    const { result, respMessage } = await getBranchStatus(req);
     console.log("Result: ", result);
-    result ? res.sendStatus(result) : res.sendStatus(202);
+    res.status(result).send(respMessage);
   } else {
-    console.log("Invalid signature");
-    res.sendStatus(400);
+    res.sendStatus(400).send("Invalid Github signature");
   }
 });
 
@@ -44,24 +43,21 @@ app.listen(process.env.PORT, () => {
 const getBranchStatus = async (req) => {
   console.log("Webhook received successfully");
 
-  var branchNames = req.body["ref"].split("/");
-  var branchName = branchNames.pop();
-
-  console.log(`Branch Name: ${branchName}`);
-  return branchName === process.env.BRANCH_NAME ? await buildProject(branchName) : 202;
+  const branchName = req.body?.ref?.split("/").pop();
+  if (!branchName) {
+    return 400, "Branch name not found in the request.";
+  }
+  return branchName === process.env.BRANCH_NAME ? await buildProject() : 202, "Build not required.";
 };
 
 const executeCmd = async (cmd) => {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`exec error: ${error}`);
-        reject(stderr + "\n" + stdout);
-      } else {
-        resolve(stderr + "\n" + stdout);
-      }
-    });
-  });
+  try {
+    const { stdout, stderr } = await exec(cmd);
+    return stderr + "\n" + stdout;
+  } catch (error) {
+    console.error(`exec error: ${error}`);
+    throw new Error(stderr + "\n" + stdout);
+  }
 };
 
 const isUpdateRequired = () => {
@@ -70,53 +66,53 @@ const isUpdateRequired = () => {
   isDocumentationWebsiteUpdated = (currentTime - documentationWebsiteBuildTime) / 1000 / 60 > process.env.DOCUMENTATION_WEBSITE_UPDATE_TIME_INTERVAL ? true : false;
   return isMindmapUpdated || isDocumentationWebsiteUpdated;
 };
-const buildProject = async (branchName) => {
-  if (branchName === process.env.BRANCH_NAME) {
-    //checkout to the branch
-    executeCmd(`cd ${process.env.PROJECT_PATH} && git checkout ${process.env.BRANCH_NAME}`);
-    //pull the project
-    executeCmd(`cd ${process.env.PROJECT_PATH} && git pull`);
+const buildProject = async () => {
+  //checkout to the branch
+  await executeCmd(`cd ${process.env.PROJECT_PATH} && git checkout ${process.env.BRANCH_NAME}`);
+  //pull the project
+  await executeCmd(`cd ${process.env.PROJECT_PATH} && git pull`);
 
-    //installing libraries through npm install
-    executeCmd(`cd ${process.env.PROJECT_PATH} && npm ci`);
+  //installing libraries through npm install
+  await executeCmd(`cd ${process.env.PROJECT_PATH} && npm ci`);
 
-    let currentTime = Date.now();
-    if (!isUpdateRequired()) {
-      if ((currentTime - contributorsBuildTime) / 1000 / 60 > process.env.CONTRIBUTORS_UPDATE_TIME_INTERVAL) {
-        console.log("No update required, updating the contributors only");
-        await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run contributors`);
-        contributorsBuildTime = curr;
-        return 200;
-      } else {
-        console.log("No update required");
-        return 202;
-      }
-    }
-    //build the mindmap
-    if (isMindmapUpdated) {
-      console.log("Building Mindmap");
-      await executeCmd(`cd ${process.env.PROJECT_PATH}/mindmap && npm run build`);
-      mindmapBuildTime = currentTime;
-      isMindmapUpdated = false;
-
-      //moving the build files to the server
-      await executeCmd(`cp -r ${process.env.PROJECT_PATH}/mindmap/dist/ ${process.env.DIST_PATH}`);
-    }
-
-    //build the documentation website
-    if (isDocumentationWebsiteUpdated) {
-      console.log("Building Documentation Website");
-      await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run build`);
-      documentationWebsiteBuildTime = currentTime;
-      contributorsBuildTime = currentTime;
-      isDocumentationWebsiteUpdated = false;
+  const currentTime = Date.now();
+  if (!isUpdateRequired()) {
+    if (contributorsBuildRequired || (currentTime - contributorsBuildTime) / 1000 / 60 > process.env.CONTRIBUTORS_UPDATE_TIME_INTERVAL) {
+      console.log("No update required, updating the contributors only");
+      await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run contributor-build`);
 
       //moving the build files to the server
       await executeCmd(`cp -r ${process.env.PROJECT_PATH}/documentation-website/dist/ ${process.env.DIST_PATH}`);
+      contributorsBuildTime = currentTime;
+      contributorsBuildRequired = false;
+      return 200;
+    } else {
+      contributorsBuildRequired = true;
+      return 202, "Contributors build will be done after the next build.";
     }
-
-    return 200;
-  } else {
-    return 202;
   }
+  //build the mindmap
+  if (isMindmapUpdated) {
+    console.log("Building Mindmap");
+    await executeCmd(`cd ${process.env.PROJECT_PATH}/mindmap && npm run build`);
+    mindmapBuildTime = currentTime;
+    isMindmapUpdated = false;
+
+    //moving the build files to the server
+    await executeCmd(`cp -r ${process.env.PROJECT_PATH}/mindmap/dist/ ${process.env.DIST_PATH}`);
+  }
+
+  //build the documentation website
+  if (isDocumentationWebsiteUpdated) {
+    console.log("Building Documentation Website");
+    await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run build`);
+    documentationWebsiteBuildTime = currentTime;
+    contributorsBuildTime = currentTime;
+    isDocumentationWebsiteUpdated = false;
+
+    //moving the build files to the server
+    await executeCmd(`cp -r ${process.env.PROJECT_PATH}/documentation-website/dist/ ${process.env.DIST_PATH}`);
+  }
+
+  return 200, "Build has been created.";
 };
