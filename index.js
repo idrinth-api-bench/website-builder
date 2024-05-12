@@ -1,7 +1,9 @@
 import express from "express";
-import { exec } from "child_process";
+import exec from "child_process";
 import crypto from "crypto";
-require("dotenv").config();
+import dotenv from "dotenv"
+
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -10,9 +12,9 @@ let isDocumentationWebsiteUpdated = false;
 let isMindmapUpdated = false;
 let contributorsBuildRequired = false;
 
-let documentationWebsiteBuildTime = Date.now();
-let mindmapBuildTime = Date.now();
-let contributorsBuildTime = Date.now();
+let documentationWebsiteBuildTime = 0;
+let mindmapBuildTime = 0;
+let contributorsBuildTime = 0;
 
 app.use(express.json());
 
@@ -25,7 +27,7 @@ app.post("/webhook", async (req, res) => {
   const calculatedSignature = `sha1=${hmac.update(payload).digest("hex")}`;
 
   if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(calculatedSignature))) {
-    const { result, respMessage } = await getBranchStatus(req);
+    const { result, respMessage } = await buildProject();
     console.log("Result: ", result);
     res.status(result).send(respMessage);
   } else {
@@ -36,16 +38,6 @@ app.post("/webhook", async (req, res) => {
 app.listen(process.env.PORT, () => {
   console.log(`Server listening on port ${port}`);
 });
-
-const getBranchStatus = async (req) => {
-  console.log("Webhook received successfully");
-
-  const branchName = req.body?.ref?.split("/").pop();
-  if (!branchName) {
-    return 400, "Branch name not found in the request.";
-  }
-  return branchName === process.env.BRANCH_NAME ? await buildProject() : 202, "Build not required.";
-};
 
 const executeCmd = async (cmd) => {
   try {
@@ -63,19 +55,13 @@ const isUpdateRequired = () => {
   isDocumentationWebsiteUpdated = (currentTime - documentationWebsiteBuildTime) / 1000 / 60 > process.env.DOCUMENTATION_WEBSITE_UPDATE_TIME_INTERVAL ? true : false;
   return isMindmapUpdated || isDocumentationWebsiteUpdated;
 };
+
 const buildProject = async () => {
-  await executeCmd(`cd ${process.env.PROJECT_PATH} && git checkout ${process.env.BRANCH_NAME}`);
-  await executeCmd(`cd ${process.env.PROJECT_PATH} && git pull`);
-
-  await executeCmd(`cd ${process.env.PROJECT_PATH} && npm ci`);
-
   const currentTime = Date.now();
   if (!isUpdateRequired()) {
     if (contributorsBuildRequired || (currentTime - contributorsBuildTime) / 1000 / 60 > process.env.CONTRIBUTORS_UPDATE_TIME_INTERVAL) {
       console.log("No update required, updating the contributors only");
-      await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run contributor-build`);
-
-      await executeCmd(`cp -r ${process.env.PROJECT_PATH}/documentation-website/dist/ ${process.env.DIST_PATH}`);
+      await initiateBuild("documentation-website","npm run contributor-build");
       contributorsBuildTime = currentTime;
       contributorsBuildRequired = false;
       return 200;
@@ -86,22 +72,25 @@ const buildProject = async () => {
   }
   if (isMindmapUpdated) {
     console.log("Building Mindmap");
-    await executeCmd(`cd ${process.env.PROJECT_PATH}/mindmap && npm run build`);
+    await initiateBuild("mindmap",'npm run build');
     mindmapBuildTime = currentTime;
     isMindmapUpdated = false;
-
-    await executeCmd(`cp -r ${process.env.PROJECT_PATH}/mindmap/dist/ ${process.env.DIST_PATH}`);
   }
 
   if (isDocumentationWebsiteUpdated) {
     console.log("Building Documentation Website");
-    await executeCmd(`cd  ${process.env.PROJECT_PATH}/documentation-website && npm run build`);
+    await initiateBuild("documentation-website","npm run build");
     documentationWebsiteBuildTime = currentTime;
     contributorsBuildTime = currentTime;
     isDocumentationWebsiteUpdated = false;
-
-    await executeCmd(`cp -r ${process.env.PROJECT_PATH}/documentation-website/dist/ ${process.env.DIST_PATH}`);
   }
 
   return 200, "Build has been created.";
 };
+
+const initiateBuild = async (projectName,command) =>{
+  await executeCmd(`cd ${process.env.ROOT_PATH}/${projectName} && git pull`);
+  await executeCmd(`cd ${process.env.ROOT_PATH}/${projectName} && npm ci`);
+  await executeCmd(`cd ${process.env.ROOT_PATH}/${projectName} && ${command}`);
+  await executeCmd(`cp -r ${process.env.DEST_PATH}/${projectName}/dist/ ${process.env.DEST_PATH}/${projectName}/`);
+}
