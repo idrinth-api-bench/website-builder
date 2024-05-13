@@ -1,0 +1,7 @@
+env:
+  node: true
+extends:
+  - "@idrinth-api-bench"
+ignorePatterns:
+  - node_modules
+root: true

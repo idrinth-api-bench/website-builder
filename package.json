@@ -5,7 +5,16 @@
   "main": "index.js",
   "type" : "module",
   "scripts": {
-    "test": "node index.js"
+    "start": "node index.js",
+    "lint": "eslint --ext=.ts --debug .",
+    "commitlint-ci": "commitlint --last",
+    "commitlint": "commitlint --edit",
+    "postinstall": "npm run simple-git-hooks",
+    "simple-git-hooks": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "commit-msg": "npm run commitlint",
+    "pre-push": "npm run commitlint-ci"
   },
   "repository": {
     "type": "git",
@@ -16,14 +25,23 @@
     "webhooks",
     "api-bench"
   ],
-  "author": "Björn Büttner, Hussain Ali",
+  "author": "Hussain Ali",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/idrinth-api-bench/api-bench/issues"
   },
-  "homepage": "https://github.com/idrinth-api-bench/api-bench/#readme",
+  "homepage": "https://idrinth-api-ben.ch",
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@idrinth-api-bench/eslint-config": "https://github.com/idrinth-api-bench/eslint-config#setup-base-config",
+    "@commitlint/cli": "^19.3.0",
+    "simple-git-hooks": "^2.11.1"
+  },
+  "engineStrict": true,
+  "engines": {
+    "node": ">=20"
   }
 }
