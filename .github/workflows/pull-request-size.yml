@@ -1,0 +1,27 @@
+name: pull request size
+on:
+  pull_request:
+    branches:
+      - the-one
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+      - run: npm install -g "https://github.com/Idrinth/check-pr-length.git#patch-1"
+      - run: git remote add base https://github.com/idrinth-api-bench/framework.git
+      - run: git config --global user.email "prs@example.com"
+      - run: git config --global user.name "PRS"
+      - run: git fetch base the-one
+      - run: git switch the-one
+      - run: git remote add pullrequest "https://github.com/${{github.event.pull_request.head.repo.full_name}}"
+      - run: git fetch pullrequest "${GITHUB_HEAD_REF}"
+      - run: git switch $GITHUB_HEAD_REF
+      - run: check-pr-length --max=350 --total=500 --base=the-one --silent=false --exclude="package-lock.json"
