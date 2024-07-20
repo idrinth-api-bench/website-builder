@@ -6,7 +6,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || '3333';
+const secret = process.env.GITHUB_SECRET || "defaultKey";
 
 let isDocumentationWebsiteUpdated = false;
 let isMindmapUpdated = false;
@@ -20,64 +21,83 @@ app.use(express.json());
 
 app.post("/webhook", async (req, res) => {
   console.log("req receieved");
-  const signature = req.headers["x-hub-signature"];
+  const signature = req.headers["x-hub-signature"] as string;
+  console.log(signature)
+  console.log("header",req.headers)
   const payload = JSON.stringify(req.body);
 
-  const hmac = crypto.createHmac("sha1", process.env.GITHUB_SECRET);
+  const hmac = crypto.createHmac("sha1", secret);
   const calculatedSignature = `sha1=${hmac.update(payload).digest("hex")}`;
+  console.log("cals", calculatedSignature)
 
   if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(calculatedSignature))) {
-    const { result, respMessage } = await getBranchStatus();
+    const {result, respMessage } = await getBranchStatus(req.body);
     console.log("Result: ", result);
-    res.status(result).send(respMessage);
+    res.status(200).send({ result, respMessage });
   } else {
     res.status(400).send("Invalid Github signature");
   }
 });
 
-app.listen(process.env.PORT, () => {
+interface BranchStatus {
+  result:  number | string;
+  respMessage: string ;
+}
+
+app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-const executeCmd = async (cmd) => {
+const executeCmd = async (cmd: string) => {
   try {
-    const { stdout, stderr } = await exec(cmd);
+    const {stdout, stderr} = await exec(cmd);
     return stderr + "\n" + stdout;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`exec error: ${error}`);
-    throw new Error(stderr + "\n" + stdout);
+    throw new Error(error.stderr + "\n" + error.stdout);
   }
 };
 
-const getBranchStatus = async (req) => {
+async function getBranchStatus(req: any): Promise<BranchStatus> {
   console.log("Webhook received successfully");
 
   const branchName = req.body?.ref?.split("/").pop();
+
   if (!branchName) {
-    return 400, "Branch name not found in the request.";
+    return { result: 400, respMessage: "Branch name not found in the request." };
   }
-  return branchName === process.env.BRANCH_NAME ? await buildProject() : 202, "Build not required.";
+
+  if (branchName === process.env.BRANCH_NAME) {
+    const { status, message } = await buildProject();
+    return { result: status, respMessage: message };
+  } else {
+    return { result: 200, respMessage: "Build not required." };
+  }
 };
 
 const isUpdateRequired = () => {
   const currentTime = Date.now();
-  isMindmapUpdated = (currentTime - mindmapBuildTime) / 1000 / 60 > process.env.MINDMAP_UPDATE_TIME_INTERVAL ? true : false;
-  isDocumentationWebsiteUpdated = (currentTime - documentationWebsiteBuildTime) / 1000 / 60 > process.env.DOCUMENTATION_WEBSITE_UPDATE_TIME_INTERVAL ? true : false;
+  const mindMapUpdateInterval = parseInt("process.env.MINDMAP_UPDATE_TIME_INTERVAL", 10); // converted to number uusing variable 
+  const documentationWebsiteUpdateInterval = parseInt("process.env.DOCUMENTATION_WEBSITE_UPDATE_TIME_INTERVAL", 10); // converted to num using variable 
+
+  isMindmapUpdated = (currentTime - mindmapBuildTime) / 1000 / 60 > mindMapUpdateInterval ? true : false;
+  isDocumentationWebsiteUpdated = (currentTime - documentationWebsiteBuildTime) / 1000 / 60 > documentationWebsiteUpdateInterval ? true : false;
   return isMindmapUpdated || isDocumentationWebsiteUpdated;
 };
 
-const buildProject = async () => {
+const buildProject = async (): Promise<{ status: number; message: string }> => {
   const currentTime = Date.now();
+  const contributionUpdateTimeInterval = parseInt('process.env.CONTRIBUTORS_UPDATE_TIME_INTERVAL', 10); // adjusted to variable 
   if (!isUpdateRequired()) {
-    if (contributorsBuildRequired || (currentTime - contributorsBuildTime) / 1000 / 60 > process.env.CONTRIBUTORS_UPDATE_TIME_INTERVAL) {
+    if (contributorsBuildRequired || (currentTime - contributorsBuildTime) / 1000 / 60 > contributionUpdateTimeInterval) {
       console.log("No update required, updating the contributors only");
       await initiateBuild("npm run contributor-build", process.env.DOCUMENTATION_WEBSITE_PATH, process.env.DOCUMENTATION_WEBSITE_DEST_PATH);
       contributorsBuildTime = currentTime;
       contributorsBuildRequired = false;
-      return 200;
+      return { status: 200, message: "Contributors build has been created." }
     } else {
       contributorsBuildRequired = true;
-      return 202, "Contributors build will be done after the next build.";
+      return { status: 202, message: "Contributors build will be done after the next build." } // adjusted return value 
     }
   }
   if (isMindmapUpdated) {
@@ -95,10 +115,10 @@ const buildProject = async () => {
     isDocumentationWebsiteUpdated = false;
   }
 
-  return 200, "Build has been created.";
+  return {status: 200, message: "Contributors build will be done after the next build."};
 };
 
-const initiateBuild = async (command, projectPath, destPath) => {
+const initiateBuild = async (command:any, projectPath: any, destPath: any) => {
   await executeCmd(`cd ${projectPath}/ && git pull`);
   await executeCmd(`cd ${projectPath}/ && npm ci`);
   await executeCmd(`cd ${projectPath}/ && ${command}`);

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "This repository is our website deploy and update tool to minimize github api queries.",
   "main": "index.js",
-  "type" : "module",
+  "type": "module",
   "scripts": {
     "start": "node index.js",
     "lint": "eslint --ext=.ts --debug .",
@@ -36,8 +36,8 @@
     "express": "^4.19.2"
   },
   "devDependencies": {
-    "@idrinth-api-bench/eslint-config": "https://github.com/idrinth-api-bench/eslint-config#setup-base-config",
     "@commitlint/cli": "^19.3.0",
+    "@idrinth-api-bench/eslint-config": "https://github.com/idrinth-api-bench/eslint-config#setup-base-config",
     "simple-git-hooks": "^2.11.1"
   },
   "engineStrict": true,
