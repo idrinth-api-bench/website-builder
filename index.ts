@@ -4,9 +4,9 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 
 dotenv.config();
-
+// waiting for replies 
 const app = express();
-const port = process.env.PORT || '3333';
+const port = process.env.PORT;
 const secret = process.env.GITHUB_SECRET;
 if(!secret) {
   console.error("Error: GITHUB_SECRET environment variable is not set.");
@@ -20,18 +20,21 @@ let contributorsBuildRequired = false;
 let documentationWebsiteBuildTime = 0;
 let mindmapBuildTime = 0;
 let contributorsBuildTime = 0;
-// fixing TS errors when back 
+
 app.use(express.json());
 
 app.post("/webhook", async (req: Request, res: Response) => {
   console.log("Request received");
   const signature = req.headers["x-hub-signature"] as string;
 
-  const payload = JSON.stringify(req.body);
-  const hmac = crypto.createHmac("sha1", secret);
+  if(!signature) {
+    throw new Error("Please provide a valid signature")
+  }
 
-  const calculatedSignature = `sha1=${hmac.update(payload).digest("hex")}`;
-  console.log("Calculated signature received", calculatedSignature) // need this to stay as number seems to change
+  const payload = JSON.stringify(req.body);
+  const hmac = crypto.createHmac("sha1", secret)
+
+  const calculatedSignature = `sha1=${hmac.update(payload).digest("hex")}`
 
   if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(calculatedSignature))) {
     const {result, respMessage} = await getBranchStatus(req.body);
@@ -43,29 +46,19 @@ app.post("/webhook", async (req: Request, res: Response) => {
 });
 
 interface BranchStatus {
-  result:  number | string;
-  respMessage: string ;
+  result:  number;
+  respMessage: string;
 };
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-const sanitize = (cmd: string) => {
-  const sanitized = cmd.replace(/[;&|`<>$(){}[\]]/g, '');
-
-  if(/[\r\n\t]/.test(cmd)) {
-    throw new Error("Invalid characters in command");
-  }
-
-  return sanitized;
-};
-
 const executeCmd = async (cmd: string) => {
   try {
-    const {stdout, stderr} = await exec(sanitize(cmd));
+    const {stdout, stderr} = await exec(cmd);
     return stderr + "\n" + stdout;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`exec error: ${error}`);
     throw new Error("Command execution failed. Check logs for details.");
   };
@@ -90,7 +83,7 @@ const getBranchStatus = async (req: Request): Promise<BranchStatus> => {
 };
 
 const isUpdateRequired = () => {
-  const currentTime = Date.now();
+  const currentTime = Date.now()
   const mindMapUpdateInterval = Number.parseInt(process.env.MINDMAP_UPDATE_TIME_INTERVAL ?? "10000");
   const documentationWebsiteUpdateInterval = Number.parseInt(process.env.DOCUMENTATION_WEBSITE_UPDATE_TIME_INTERVAL ?? "10000");
   isMindmapUpdated = (currentTime - mindmapBuildTime) / 1000 / 60 > mindMapUpdateInterval;
@@ -101,9 +94,6 @@ const isUpdateRequired = () => {
 const buildProject = async (): Promise<{ status: number; message: string }> => {
   const currentTime = Date.now();
   const contributionUpdateTimeInterval = Number.parseInt(process.env.CONTRIBUTORS_UPDATE_TIME_INTERVAL ?? "10000");
-  if (!process.env.DOCUMENTATION_WEBSITE_PATH) {
-    console.log('error')
-  }
   if (!isUpdateRequired()) {
     if (contributorsBuildRequired || (currentTime - contributorsBuildTime) / 1000 / 60 > contributionUpdateTimeInterval) {
       console.log("No update required, updating the contributors only");
@@ -120,6 +110,7 @@ const buildProject = async (): Promise<{ status: number; message: string }> => {
     console.log("Building Mindmap");
     await initiateBuild("npm run build", process.env.MINDMAP_PATH!, process.env.MINDMAP_DEST_PATH!);
     mindmapBuildTime = currentTime;
+    contributorsBuildTime = currentTime;
     isMindmapUpdated = false;
   }
 
@@ -135,8 +126,8 @@ const buildProject = async (): Promise<{ status: number; message: string }> => {
 };
 
 const initiateBuild = async (command: string, projectPath: string, destPath: string) => {
-  await executeCmd(`cd ${sanitize(projectPath)}/ && git pull`);
-  await executeCmd(`cd ${sanitize(projectPath)}/ && npm ci`);
-  await executeCmd(`cd ${sanitize(projectPath)}/ && ${sanitize(command)}`);
-  await executeCmd(`cp -r ${sanitize(projectPath)}/dist/ ${sanitize(destPath)}/`);
+  await executeCmd(`cd ${(projectPath)}/ && git pull`);
+  await executeCmd(`cd ${(projectPath)}/ && npm ci`);
+  await executeCmd(`cd ${(projectPath)}/ && ${(command)}`);
+  await executeCmd(`cp -r ${(projectPath)}/dist/ ${(destPath)}/`);
 };
