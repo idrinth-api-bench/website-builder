@@ -33,7 +33,7 @@
   "homepage": "https://idrinth-api-ben.ch",
   "dependencies": {
     "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+    "express": "^4.21.1"
   },
   "devDependencies": {
     "@idrinth-api-bench/eslint-config": "https://github.com/idrinth-api-bench/eslint-config#setup-base-config",
