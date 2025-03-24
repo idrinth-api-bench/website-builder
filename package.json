@@ -38,7 +38,7 @@
   "devDependencies": {
     "@commitlint/cli": "^19.3.0",
     "@idrinth-api-bench/eslint-config": "https://github.com/idrinth-api-bench/eslint-config#setup-base-config",
-    "@types/express": "^5.0.0",
+    "@types/express": "^5.0.1",
     "simple-git-hooks": "^2.11.1"
   },
   "engineStrict": true,
