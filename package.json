@@ -32,7 +32,7 @@
   },
   "homepage": "https://idrinth-api-ben.ch",
   "dependencies": {
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.5.0",
     "express": "^4.21.2"
   },
   "devDependencies": {
