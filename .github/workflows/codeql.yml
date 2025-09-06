@@ -34,7 +34,7 @@ jobs:
         languages: javascript-typescript
         queries: security-and-quality
     - name: Setup Node.js environment ${{ env.CURRENT_NODE_VERSION }}
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: latest
         cache: 'npm'
